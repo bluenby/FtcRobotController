@@ -27,19 +27,26 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.firstinspires.ftc.robotcontroller.external.samples;
+package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.Disabled;
+import com.qualcomm.robotcore.hardware.DcMotor;
+;
+import org.firstinspires.ftc.vision.apriltag.AprilTagGameDatabase;
+import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import org.firstinspires.ftc.robotcore.external.hardware.camera.BuiltinCameraDirection;
-import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+import com.qualcomm.robotcore.hardware.TouchSensor;
+
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.robotcore.external.hardware.camera.BuiltinCameraDirection;
+import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
 import org.firstinspires.ftc.vision.VisionPortal;
 import org.firstinspires.ftc.vision.apriltag.AprilTagDetection;
-import org.firstinspires.ftc.vision.apriltag.AprilTagGameDatabase;
 import org.firstinspires.ftc.vision.apriltag.AprilTagProcessor;
+import org.firstinspires.ftc.vision.tfod.TfodProcessor;
 
 import java.util.List;
 
@@ -67,9 +74,9 @@ import java.util.List;
  * Use Android Studio to Copy this Class, and Paste it into your team's code folder with a new name.
  * Remove or comment out the @Disabled line to add this OpMode to the Driver Station OpMode list.
  */
-@TeleOp(name = "Concept: AprilTag", group = "Concept")
-@Disabled
-public class ConceptAprilTag extends LinearOpMode {
+@Autonomous(name = "imudriver")
+
+public class imudriver extends encoderdrive {
 
     private static final boolean USE_WEBCAM = true;  // true for webcam, false for phone camera
 
@@ -77,6 +84,12 @@ public class ConceptAprilTag extends LinearOpMode {
      * The variable to store our instance of the AprilTag processor.
      */
     private AprilTagProcessor aprilTag;
+
+    private DcMotor arm;
+
+    private TfodProcessor tfod;
+
+    private TouchSensor touch;
 
     /**
      * The variable to store our instance of the vision portal.
@@ -86,7 +99,14 @@ public class ConceptAprilTag extends LinearOpMode {
     @Override
     public void runOpMode() {
 
-        initAprilTag();
+        initVision();
+        driveinit();
+
+        arm = hardwareMap.get(DcMotor.class, "arm");
+        touch = hardwareMap.get(TouchSensor.class, "touch");
+        arm.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+
+        ((DcMotorEx) arm).setTargetPositionTolerance(10);
 
         // Wait for the DS start button to be touched.
         telemetry.addData("DS preview on/off", "3 dots, Camera Stream");
@@ -96,6 +116,8 @@ public class ConceptAprilTag extends LinearOpMode {
 
         if (opModeIsActive()) {
             while (opModeIsActive()) {
+
+
 
                 telemetryAprilTag();
 
@@ -122,26 +144,26 @@ public class ConceptAprilTag extends LinearOpMode {
     /**
      * Initialize the AprilTag processor.
      */
-    private void initAprilTag() {
+    private void initVision() {
 
         // Create the AprilTag processor.
         aprilTag = new AprilTagProcessor.Builder()
 
-            // The following default settings are available to un-comment and edit as needed.
-            .setDrawAxes(false)
-            .setDrawCubeProjection(false)
-            .setDrawTagOutline(true)
-            .setTagFamily(AprilTagProcessor.TagFamily.TAG_36h11)
-            .setTagLibrary(AprilTagGameDatabase.getCenterStageTagLibrary())
-            .setOutputUnits(DistanceUnit.MM, AngleUnit.DEGREES)
+                // The following default settings are available to un-comment and edit as needed.
+                //.setDrawAxes(false)
+                //.setDrawCubeProjection(false)
+                //.setDrawTagOutline(true)
+                //.setTagFamily(AprilTagProcessor.TagFamily.TAG_36h11)
+                //.setTagLibrary(AprilTagGameDatabase.getCenterStageTagLibrary())
+                .setOutputUnits(DistanceUnit.MM, AngleUnit.DEGREES)
 
-            // == CAMERA CALIBRATION ==
-            // If you do not manually specify calibration parameters, the SDK will attempt
-            // to load a predefined calibration for your camera.
-            //.setLensIntrinsics(578.272, 578.272, 402.145, 221.506)
-            // ... these parameters are fx, fy, cx, cy.
+                // == CAMERA CALIBRATION ==
+                // If you do not manually specify calibration parameters, the SDK will attempt
+                // to load a predefined calibration for your camera.
+                //.setLensIntrinsics(578.272, 578.272, 402.145, 221.506)
+                // ... these parameters are fx, fy, cx, cy.
 
-            .build();
+                .build();
 
         // Adjust Image Decimation to trade-off detection-range for detection-rate.
         // eg: Some typical detection data using a Logitech C920 WebCam
@@ -152,12 +174,21 @@ public class ConceptAprilTag extends LinearOpMode {
         // Note: Decimation can be changed on-the-fly to adapt during a match.
         //aprilTag.setDecimation(3);
 
+        String[] labels = new String[]{"Red"};
+
+        tfod = new TfodProcessor.Builder()
+
+                .setModelLabels(labels)
+                .setModelFileName("/sdcard/FIRST/tflitemodels/myCustomModel.tflite")
+                .setModelAspectRatio(16.0 / 9.0)
+                .build();
+
         // Create the vision portal by using a builder.
         VisionPortal.Builder builder = new VisionPortal.Builder();
 
         // Set the camera (webcam vs. built-in RC phone camera).
         if (USE_WEBCAM) {
-            builder.setCamera(hardwareMap.get(WebcamName.class, "Webcam 1"));
+            builder.setCamera(hardwareMap.get(WebcamName.class, "Webcam"));
         } else {
             builder.setCamera(BuiltinCameraDirection.BACK);
         }
@@ -179,11 +210,14 @@ public class ConceptAprilTag extends LinearOpMode {
         // Set and enable the processor.
         builder.addProcessor(aprilTag);
 
+        builder.addProcessor(tfod);
+
         // Build the Vision Portal, using the above settings.
         visionPortal = builder.build();
 
         // Disable or re-enable the aprilTag processor at any time.
-        //visionPortal.setProcessorEnabled(aprilTag, true);
+        visionPortal.setProcessorEnabled(aprilTag, false);
+        visionPortal.setProcessorEnabled(tfod, true);
 
     }   // end method initAprilTag()
 
@@ -200,14 +234,30 @@ public class ConceptAprilTag extends LinearOpMode {
         for (AprilTagDetection detection : currentDetections) {
             if (detection.metadata != null) {
                 telemetry.addLine(String.format("\n==== (ID %d) %s", detection.id, detection.metadata.name));
-                telemetry.addLine(String.format("XYZ %6.1f %6.1f %6.1f  (inch)", detection.ftcPose.x, detection.ftcPose.y, detection.ftcPose.z));
+                telemetry.addLine(String.format("XYZ %6.1f %6.1f %6.1f  (MM)", detection.ftcPose.x, detection.ftcPose.y, detection.ftcPose.z));
                 telemetry.addLine(String.format("PRY %6.1f %6.1f %6.1f  (deg)", detection.ftcPose.pitch, detection.ftcPose.roll, detection.ftcPose.yaw));
-                telemetry.addLine(String.format("RBE %6.1f %6.1f %6.1f  (inch, deg, deg)", detection.ftcPose.range, detection.ftcPose.bearing, detection.ftcPose.elevation));
+                telemetry.addLine(String.format("RBE %6.1f %6.1f %6.1f  (MM, deg, deg)", detection.ftcPose.range, detection.ftcPose.bearing, detection.ftcPose.elevation));
+                if (detection.id == 3) {
+                    runOffset(detection.ftcPose.x + 150, detection.ftcPose.y - 300);
+                    visionPortal.setProcessorEnabled(aprilTag, false);
+                    arm.setTargetPosition(-20000);
+                    arm.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+                    while (arm.isBusy()) {
+                        if (touch.isPressed()) arm.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+                        telemetry.addData("", "%s", arm.getCurrentPosition());
+                        telemetry.update();
+                        sleep(20);
+                        idle();
+                    }
+                    arm.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+                }
             } else {
                 telemetry.addLine(String.format("\n==== (ID %d) Unknown", detection.id));
                 telemetry.addLine(String.format("Center %6.0f %6.0f   (pixels)", detection.center.x, detection.center.y));
             }
         }   // end for() loop
+
+//        if (currentDetections.isEmpty())
 
         // Add "key" information to telemetry
         telemetry.addLine("\nkey:\nXYZ = X (Right), Y (Forward), Z (Up) dist.");
