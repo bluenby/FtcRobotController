@@ -40,7 +40,7 @@ public class MeepMeepTesting {
                 .setConstraints(41, 41, Math.toRadians(180), Math.toRadians(180), 16)
                 .followTrajectorySequence(drive ->
                         drive.trajectorySequenceBuilder(startPose)
-                                .addSpatialMarker(new Vector2d(36.0, 60.0), () -> {
+                                .addTemporalMarker(4.0, () -> {
                                     //todo: start extending the arm here
                                 })
                                 .lineToSplineHeading(spikePose)
